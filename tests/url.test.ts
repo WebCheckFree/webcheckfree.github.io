@@ -1,7 +1,20 @@
-import { describe, expect, it } from "vitest";
-import { canonicalizeCrawlUrl, isBlockedHostname, isPublicIp, isSafeCrawlCandidate, normalizeUrl, sameRegistrableDomain } from "@/worker/security/url";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  canonicalizeCrawlUrl,
+  isBlockedHostname,
+  isPublicIp,
+  isSafeCrawlCandidate,
+  normalizeUrl,
+  resolveAndValidateHostname,
+  sameRegistrableDomain,
+} from "@/worker/security/url";
+import type { Env } from "@/worker/types";
 
- describe("URL-beveiliging", () => {
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe("URL-beveiliging", () => {
   it("voegt HTTPS toe en verwijdert fragmenten", () => {
     expect(normalizeUrl("Example.COM/path#deel").toString()).toBe("https://example.com/path");
   });
@@ -23,6 +36,40 @@ import { canonicalizeCrawlUrl, isBlockedHostname, isPublicIp, isSafeCrawlCandida
     expect(isPublicIp("8.8.8.8")).toBe(true);
     expect(isPublicIp("::1")).toBe(false);
     expect(isPublicIp("2001:4860:4860::8888")).toBe(true);
+  });
+  it("valt terug op Google DNS wanneer Cloudflare DoH niet bereikbaar is", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(input.toString());
+      if (url.hostname === "cloudflare-dns.com") throw new Error("Cloudflare DoH unavailable");
+
+      const isARecord = url.searchParams.get("type") === "A";
+      return new Response(JSON.stringify({
+        Status: 0,
+        Answer: isARecord ? [{ type: 1, data: "93.184.216.34" }] : [],
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+
+    await expect(resolveAndValidateHostname({} as Env, null, "example.com"))
+      .resolves.toEqual(["93.184.216.34"]);
+  });
+  it("blijft werken wanneer alleen een A-record bruikbaar is", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(input.toString());
+      const isARecord = url.searchParams.get("type") === "A";
+      return new Response(JSON.stringify({
+        Status: 0,
+        Answer: isARecord ? [{ type: 1, data: "93.184.216.34" }] : [],
+      }), {
+        status: 200,
+        headers: { "content-type": "application/dns-json" },
+      });
+    });
+
+    await expect(resolveAndValidateHostname({} as Env, null, "example.com"))
+      .resolves.toEqual(["93.184.216.34"]);
   });
   it("normaliseert trackingparameters voor crawl-URL's", () => {
     expect(canonicalizeCrawlUrl("/page?utm_source=x&b=2&a=1#top", "https://example.com")?.toString()).toBe("https://example.com/page?a=1&b=2");
