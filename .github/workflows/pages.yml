@@ -42,7 +42,7 @@ jobs:
           await writeFile(path, source.replace("__WEBCHECK_API_BASE_URL__", configured));
           console.log(configured ? `Using Cloudflare Worker API: ${configured}` : "No Worker API URL configured; setup guidance remains visible.");
           NODE
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
