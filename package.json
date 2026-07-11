@@ -1,0 +1,47 @@
+{
+  "name": "webcheckfree",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Privacy-first open-source website auditing on GitHub Pages and Cloudflare Workers Free.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "dev": "wrangler dev -c wrangler.local.jsonc",
+    "dev:worker": "wrangler dev -c wrangler.local.jsonc",
+    "dev:site": "node scripts/serve-site.mjs",
+    "deploy:worker": "wrangler deploy && wrangler d1 migrations apply webcheckfree --remote",
+    "build": "wrangler deploy --dry-run --outdir dist-worker",
+    "cf:typegen": "wrangler types",
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "check:site": "node scripts/check-site.mjs",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run check:site && npm run build",
+    "d1:migrate:local": "wrangler d1 migrations apply webcheckfree --local -c wrangler.local.jsonc",
+    "d1:migrate:remote": "wrangler d1 migrations apply webcheckfree --remote"
+  },
+  "dependencies": {
+    "cheerio": "^1.1.2",
+    "fast-xml-parser": "^5.3.0",
+    "ipaddr.js": "^2.2.0",
+    "tldts": "^7.0.17",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.37.0",
+    "@playwright/test": "^1.55.1",
+    "@types/node": "^24.6.0",
+    "eslint": "^9.37.0",
+    "globals": "^16.4.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.1",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.110.0"
+  }
+}

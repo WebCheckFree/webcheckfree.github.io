@@ -1,0 +1,21 @@
+name: Feature request
+description: Stel een verbetering voor.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Probleem of behoefte
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Voorgestelde oplossing
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptatiecriteria

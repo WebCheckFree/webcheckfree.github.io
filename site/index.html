@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#2457f5">
+  <meta name="description" content="Gratis open-source website-audit voor performance, gebruikservaring, SEO en beveiliging.">
+  <meta name="robots" content="index,follow">
+  <meta property="og:title" content="WEBCHECK — gratis website-audit">
+  <meta property="og:description" content="Controleer technische performance, UX, SEO en beveiliging zonder account.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://webcheckfree.github.io">
+  <meta property="og:image" content="https://webcheckfree.github.io/og-image.png">
+  <link rel="icon" href="./icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css">
+  <title>WEBCHECK — gratis website-audit</title>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Ga naar inhoud</a>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="wordmark" href="#/" aria-label="WEBCHECK startpagina"><span class="wordmark-mark">W</span><span>WEBCHECK</span></a>
+      <nav class="main-nav" aria-label="Hoofdnavigatie">
+        <a href="#/methodology">Methodologie</a>
+        <a href="#/privacy">Privacy</a>
+        <a id="github-link" href="https://github.com/WebCheckFree/webcheckfree.github.io" target="_blank" rel="noreferrer">GitHub</a>
+        <button id="theme-toggle" class="icon-button" type="button" aria-label="Wissel kleurmodus">◐</button>
+      </nav>
+    </div>
+  </header>
+  <noscript><div class="noscript">JavaScript is vereist om audits te starten en rapporten te bekijken.</div></noscript>
+  <main id="main-content" tabindex="-1"></main>
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div class="footer-note"><strong>WEBCHECK</strong><p>Open-source, privacygericht en uitsluitend bedoeld voor passieve controles van publiek bereikbare websites.</p></div>
+      <nav aria-label="Voetnavigatie"><a href="#/methodology">Methodologie</a><a href="#/privacy">Privacy</a><a href="https://github.com/WebCheckFree/webcheckfree.github.io" target="_blank" rel="noreferrer">Broncode</a></nav>
+    </div>
+  </footer>
+  <script src="./config.js"></script>
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>

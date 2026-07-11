@@ -1,0 +1,77 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "11111111-1111-4111-8111-111111111111",
+  "requestedUrl": "https://example.com",
+  "normalizedUrl": "https://example.com/",
+  "finalUrl": "https://example.com/",
+  "domain": "example.com",
+  "startedAt": "2026-07-11T10:00:00.000Z",
+  "completedAt": "2026-07-11T10:00:02.000Z",
+  "status": "completed",
+  "scanMode": "quick",
+  "devices": ["mobile"],
+  "pagesScanned": 1,
+  "linksChecked": 1,
+  "skippedUrls": [],
+  "aiEnabled": false,
+  "aiStatus": "not-requested",
+  "scores": {
+    "performance": {"score": 95, "label": "Uitstekend", "deductions": []},
+    "ux": {"score": 90, "label": "Uitstekend", "deductions": []},
+    "seo": {"score": 85, "label": "Goed", "deductions": [{"findingId":"abc123","points":2,"reason":"Paginatitel heeft een ongunstige lengte"}]},
+    "security": {"score": 80, "label": "Goed", "deductions": []},
+    "overall": 88,
+    "overallLabel": "Goed"
+  },
+  "metrics": {
+    "mobile": {
+      "source": "deterministic",
+      "fieldDataAvailable": false,
+      "ttfbMs": 200,
+      "pageWeightBytes": 1000,
+      "notes": ["PageSpeed Insights niet geconfigureerd."]
+    }
+  },
+  "findings": [
+    {
+      "id": "abc123",
+      "category": "seo",
+      "subcategory": "title",
+      "title": "Paginatitel heeft een ongunstige lengte",
+      "description": "De titel is te kort om het paginaonderwerp duidelijk te beschrijven.",
+      "evidence": "Titel: Example",
+      "affectedUrl": "https://example.com/",
+      "severity": "low",
+      "confidence": "confirmed",
+      "source": "html",
+      "recommendation": "Schrijf een unieke en beschrijvende paginatitel.",
+      "technicalImplementation": "Pas de route- of CMS-metadata aan.",
+      "estimatedEffort": "klein",
+      "acceptanceCriterion": "De titel is uniek, relevant en bevat ongeveer 20 tot 60 tekens.",
+      "references": []
+    }
+  ],
+  "pages": [
+    {
+      "requestedUrl": "https://example.com",
+      "finalUrl": "https://example.com/",
+      "statusCode": 200,
+      "contentType": "text/html",
+      "responseTimeMs": 200,
+      "redirectCount": 0,
+      "title": "Example",
+      "metaDescription": "Example description",
+      "canonical": "https://example.com/",
+      "h1": ["Example"],
+      "indexable": true,
+      "wordCount": 300
+    }
+  ],
+  "limitations": ["Voorbeeldbeperking"],
+  "metadata": {
+    "auditDurationMs": 2000,
+    "userAgent": "WEBCHECK/1.0",
+    "pageSpeedUsed": false,
+    "storageAdapter": "memory"
+  }
+}

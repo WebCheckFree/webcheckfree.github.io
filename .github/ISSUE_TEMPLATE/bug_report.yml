@@ -1,0 +1,28 @@
+name: Bug report
+description: Meld een reproduceerbaar probleem.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Beschrijving
+      description: Wat ging er fout?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproductiestappen
+      placeholder: "1. Open ...\n2. Vul ... in\n3. Klik ..."
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser en versie
+  - type: textarea
+    id: logs
+    attributes:
+      label: Veilige foutinformatie
+      description: Plaats nooit API-sleutels, tokens of persoonsgegevens.

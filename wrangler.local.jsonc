@@ -1,0 +1,34 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "webcheckfree-api-local",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-07-11",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "webcheckfree",
+      "database_id": "local-webcheckfree"
+    }
+  ],
+  "vars": {
+    "APP_URL": "http://localhost:4173",
+    "APP_NAME": "WEBCHECK",
+    "GITHUB_REPOSITORY_URL": "https://github.com/WebCheckFree/webcheckfree.github.io",
+    "CORS_ALLOWED_ORIGINS": "http://localhost:4173",
+    "AI_ENABLED": "false",
+    "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast",
+    "AI_DAILY_REQUEST_LIMIT": "3",
+    "AI_MAX_OUTPUT_TOKENS": "1400",
+    "PAGESPEED_ENABLED": "false",
+    "AUDIT_DATA_TTL_MINUTES": "60",
+    "AUDIT_MAX_RESPONSE_BYTES": "350000",
+    "AUDIT_DNS_CACHE_SECONDS": "300",
+    "RATE_LIMIT_QUICK_PER_HOUR": "5",
+    "RATE_LIMIT_STANDARD_PER_HOUR": "2",
+    "RATE_LIMIT_EXTENDED_PER_HOUR": "1",
+    "LOG_LEVEL": "debug"
+  }
+}
