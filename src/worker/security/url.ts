@@ -96,7 +96,11 @@ async function resolveDnsType(hostname: string, type: DnsRecordType): Promise<st
     }
   }
 
-  if (!hadSuccessfulResponse && lastError) throw lastError;
+  if (!hadSuccessfulResponse && lastError) {
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("DNS resolver request failed", { cause: lastError });
+  }
   return [];
 }
 
