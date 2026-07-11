@@ -3,7 +3,8 @@ name: Deploy Cloudflare Worker
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
       - "src/**"
       - "migrations/**"
@@ -23,20 +24,29 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: production
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+
+      - name: Install dependencies from public npm registry
+        run: npm install --package-lock=false --registry=https://registry.npmjs.org --no-audit --no-fund
+
       - name: Validate project
-        run: npm run typecheck && npm test && npm run build
+        run: npm run check
+
       - name: Deploy Worker and provision bindings
         run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Apply D1 migrations
         run: npx wrangler d1 migrations apply webcheckfree --remote
         env:
