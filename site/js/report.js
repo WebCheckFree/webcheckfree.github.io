@@ -5,12 +5,101 @@ import { exportCsv, exportHtml, exportJson } from "./exports.js";
 function storedAudit(id) {
   try { return JSON.parse(sessionStorage.getItem(`webcheck:audit:${id}`) || "null"); } catch { return null; }
 }
-function saveAudit(audit) { try { sessionStorage.setItem(`webcheck:audit:${audit.id}`, JSON.stringify(audit)); } catch {} }
-function metric(value, suffix = "") { return value === undefined || value === null ? "Niet gemeten" : `${Math.round(value * 100) / 100}${suffix}`; }
-function sortedFindings(audit) { return [...audit.findings].sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity] || a.title.localeCompare(b.title)); }
+
+function saveAudit(audit) {
+  try { sessionStorage.setItem(`webcheck:audit:${audit.id}`, JSON.stringify(audit)); } catch {}
+}
+
+function metric(value, suffix = "") {
+  return value === undefined || value === null ? "Niet gemeten" : `${Math.round(value * 100) / 100}${suffix}`;
+}
+
+function findingKey(finding) {
+  return [
+    finding.category,
+    finding.subcategory,
+    finding.title,
+    finding.recommendation,
+    finding.acceptanceCriterion,
+  ].join("|");
+}
+
+function groupFindings(findings) {
+  const groups = new Map();
+  for (const finding of findings || []) {
+    const key = findingKey(finding);
+    const group = groups.get(key) || [];
+    group.push(finding);
+    groups.set(key, group);
+  }
+
+  return [...groups.values()].map((group) => {
+    const representative = [...group].sort((a, b) =>
+      severityOrder[a.severity] - severityOrder[b.severity]
+      || a.title.localeCompare(b.title, "nl"),
+    )[0];
+    const affectedUrls = [...new Set(group.flatMap((finding) => finding.affectedUrls || [finding.affectedUrl]))].sort();
+    const occurrenceCount = group.reduce((total, finding) => total + (finding.occurrenceCount || 1), 0);
+    return {
+      ...representative,
+      affectedUrl: affectedUrls[0] || representative.affectedUrl,
+      affectedUrls,
+      occurrenceCount,
+    };
+  });
+}
+
+function uniqueBy(values, key) {
+  const seen = new Set();
+  return values.filter((value) => {
+    const fingerprint = key(value);
+    if (seen.has(fingerprint)) return false;
+    seen.add(fingerprint);
+    return true;
+  });
+}
+
+function normalizeSummary(summary) {
+  if (!summary) return summary;
+  return {
+    ...summary,
+    topPriorities: uniqueBy(summary.topPriorities || [], (item) => `${item.title}|${item.acceptanceCriterion}`).slice(0, 5),
+    quickWins: [...new Set(summary.quickWins || [])].slice(0, 6),
+    mediumTermImprovements: [...new Set(summary.mediumTermImprovements || [])].slice(0, 6),
+    implementationPlan: uniqueBy(summary.implementationPlan || [], (item) => `${item.action}|${item.verification}`)
+      .slice(0, 5)
+      .map((item, index) => ({ ...item, step: index + 1 })),
+  };
+}
+
+function normalizeAudit(audit) {
+  return {
+    ...audit,
+    findings: groupFindings(audit.findings),
+    aiSummary: normalizeSummary(audit.aiSummary),
+  };
+}
+
+function sortedFindings(audit) {
+  return [...audit.findings].sort((a, b) =>
+    severityOrder[a.severity] - severityOrder[b.severity]
+    || a.title.localeCompare(b.title, "nl"),
+  );
+}
+
+function affectedUrlsBlock(finding) {
+  const urls = finding.affectedUrls || [finding.affectedUrl];
+  if (urls.length === 1) return `<code>${esc(urls[0])}</code>`;
+  return `<div class="info-block"><h4>Getroffen pagina’s (${urls.length})</h4><ul>${urls.map((url) => `<li><code>${esc(url)}</code></li>`).join("")}</ul></div>`;
+}
 
 function findingCard(finding) {
-  return `<details class="finding-card severity-${esc(finding.severity)}"><summary><div class="finding-summary"><div class="finding-badges">${badge(severityLabels[finding.severity], finding.severity)}${badge(categoryLabels[finding.category])}${badge(confidenceLabels[finding.confidence])}</div><h3>${esc(finding.title)}</h3><p>${esc(finding.description)}</p><code>${esc(finding.affectedUrl)}</code></div><span class="details-label">Details</span></summary><div class="finding-detail"><div class="info-block"><h4>Bewijs</h4><p>${esc(finding.evidence)}</p></div><div class="info-block"><h4>Aanbeveling</h4><p>${esc(finding.recommendation)}</p></div><div class="info-block"><h4>Technische implementatie</h4><p>${esc(finding.technicalImplementation)}</p></div><div class="info-block"><h4>Acceptatiecriterium</h4><p>${esc(finding.acceptanceCriterion)}</p></div><dl class="finding-meta"><div><dt>Bron</dt><dd>${esc(finding.source)}</dd></div><div><dt>Inspanning</dt><dd>${esc(finding.estimatedEffort)}</dd></div>${finding.measuredValue !== undefined ? `<div><dt>Gemeten</dt><dd>${esc(finding.measuredValue)}</dd></div>` : ""}${finding.targetValue !== undefined ? `<div><dt>Doel</dt><dd>${esc(finding.targetValue)}</dd></div>` : ""}</dl></div></details>`;
+  const urls = finding.affectedUrls || [finding.affectedUrl];
+  const scope = urls.length > 1 ? `${urls.length} pagina’s` : "1 pagina";
+  const occurrences = finding.occurrenceCount && finding.occurrenceCount > urls.length
+    ? ` · ${finding.occurrenceCount} waarnemingen`
+    : "";
+  return `<details class="finding-card severity-${esc(finding.severity)}"><summary><div class="finding-summary"><div class="finding-badges">${badge(severityLabels[finding.severity], finding.severity)}${badge(categoryLabels[finding.category])}${badge(confidenceLabels[finding.confidence])}${badge(`${scope}${occurrences}`)}</div><h3>${esc(finding.title)}</h3><p>${esc(finding.description)}</p><code>${esc(finding.affectedUrl)}</code></div><span class="details-label">Details</span></summary><div class="finding-detail">${affectedUrlsBlock(finding)}<div class="info-block"><h4>Bewijs</h4><p>${esc(finding.evidence)}</p></div><div class="info-block"><h4>Aanbeveling</h4><p>${esc(finding.recommendation)}</p></div><div class="info-block"><h4>Technische implementatie</h4><p>${esc(finding.technicalImplementation)}</p></div><div class="info-block"><h4>Acceptatiecriterium</h4><p>${esc(finding.acceptanceCriterion)}</p></div><dl class="finding-meta"><div><dt>Bron</dt><dd>${esc(finding.source)}</dd></div><div><dt>Inspanning</dt><dd>${esc(finding.estimatedEffort)}</dd></div>${finding.measuredValue !== undefined ? `<div><dt>Gemeten</dt><dd>${esc(finding.measuredValue)}</dd></div>` : ""}${finding.targetValue !== undefined ? `<div><dt>Doel</dt><dd>${esc(finding.targetValue)}</dd></div>` : ""}</dl></div></details>`;
 }
 
 function managementSummary(audit) {
@@ -20,7 +109,7 @@ function managementSummary(audit) {
   const sourceKind = isAi ? "success" : "good";
   if (!summary) {
     const top = sortedFindings(audit).slice(0, 5);
-    return `<section class="report-section"><div class="section-heading"><div><span class="eyebrow">Managementsamenvatting</span><h2>Belangrijkste conclusies</h2></div>${badge("Regelgebaseerd")}</div><p>WEBCHECK controleerde ${audit.pagesScanned} pagina('s) en ${audit.linksChecked} link(s). Er zijn ${audit.findings.length} aandachtspunten gevonden.</p>${top.length ? `<ol class="priority-list">${top.map((finding) => `<li><strong>${esc(finding.title)}</strong><span>${esc(finding.recommendation)}</span></li>`).join("")}</ol>` : `<div class="empty-state">Geen automatische aandachtspunten gevonden binnen de uitgevoerde scope.</div>`}</section>`;
+    return `<section class="report-section"><div class="section-heading"><div><span class="eyebrow">Managementsamenvatting</span><h2>Belangrijkste conclusies</h2></div>${badge("Regelgebaseerd")}</div><p>WEBCHECK controleerde ${audit.pagesScanned} pagina('s) en ${audit.linksChecked} link(s). Er zijn ${audit.findings.length} unieke aandachtspunten gevonden.</p>${top.length ? `<ol class="priority-list">${top.map((finding) => `<li><strong>${esc(finding.title)}</strong><span>${esc(finding.recommendation)}</span></li>`).join("")}</ol>` : `<div class="empty-state">Geen automatische aandachtspunten gevonden binnen de uitgevoerde scope.</div>`}</section>`;
   }
 
   return `<section class="report-section ai-section"><div class="section-heading"><div><span class="eyebrow">Managementsamenvatting</span><h2>${isAi ? "AI-verrijkt advies" : "Automatische conclusies en prioriteiten"}</h2></div>${badge(sourceLabel, sourceKind)}</div><div class="ai-lead"><p>${esc(summary.executiveSummary)}</p></div><div class="ai-columns"><div><h3>Topprioriteiten</h3>${summary.topPriorities.length ? `<ol>${summary.topPriorities.map((priority) => `<li><strong>${esc(priority.title)}</strong><span>${esc(priority.rationale)}</span><small>${esc(priority.acceptanceCriterion)}</small></li>`).join("")}</ol>` : `<p>Geen prioriteiten binnen de automatisch controleerbare scope.</p>`}</div><div><h3>Quick wins</h3>${summary.quickWins.length ? `<ul>${summary.quickWins.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : `<p>Geen afzonderlijke quick wins vastgesteld.</p>`}<h3>Middellange termijn</h3>${summary.mediumTermImprovements.length ? `<ul>${summary.mediumTermImprovements.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : `<p>Geen structurele verbeteringen vastgesteld.</p>`}</div></div>${summary.implementationPlan.length ? `<div class="roadmap-card"><h3>Implementatievolgorde</h3><ol>${summary.implementationPlan.map((item) => `<li><strong>Stap ${item.step}: ${esc(item.action)}</strong><span>${esc(item.why)}</span><small>${esc(item.verification)}</small></li>`).join("")}</ol></div>` : ""}<p><small>${esc(summary.disclaimer)}</small></p>${!isAi && audit.metadata?.aiAvailable && apiBaseUrl ? `<button id="generate-ai" class="button button-secondary" type="button">Verrijk met Cloudflare Workers AI</button><div id="ai-error"></div>` : ""}</section>`;
@@ -46,7 +135,7 @@ function roadmapSection(audit) {
 
 function renderReport(audit) {
   const metrics = Object.entries(audit.metrics || {}).map(([device, values]) => `<article class="metric-card"><h3>${esc(device)}</h3><div class="metric-row"><span>LCP</span><strong>${metric(values.lcpMs, " ms")}</strong></div><div class="metric-row"><span>CLS</span><strong>${metric(values.cls)}</strong></div><div class="metric-row"><span>INP</span><strong>${metric(values.inpMs, " ms")}</strong></div><div class="metric-row"><span>TTFB</span><strong>${metric(values.ttfbMs, " ms")}</strong></div><small>Bron: ${esc(values.source)}</small></article>`).join("");
-  return `<div class="container report-page"><a class="back-link" href="#/">← Nieuwe controle</a><header class="report-header"><div><span class="eyebrow">Auditrapport</span><h1>${esc(audit.domain)}</h1><div class="report-meta-line"><span>${esc(new Date(audit.completedAt || audit.startedAt).toLocaleString("nl-BE"))}</span><span>${esc(audit.scanMode)}</span><span>${esc(audit.devices.join(", "))}</span><span>${audit.pagesScanned} pagina’s</span><span>${audit.linksChecked} links</span><span>${audit.status === "partial" ? "Gedeeltelijk" : "Voltooid"}</span></div></div><div class="report-toolbar"><button id="export-json" class="button button-secondary">JSON</button><button id="export-csv" class="button button-secondary">CSV</button><button id="export-html" class="button button-secondary">HTML</button><button id="print-report" class="button button-primary">Afdrukken / PDF</button><button id="delete-report" class="button button-secondary">Rapport verwijderen</button></div></header><section class="overall-card"><div><span class="eyebrow">Totaalscore</span><strong>${audit.scores.overall}</strong><span>/100</span></div><dl>${["performance", "ux", "seo", "security"].map((category) => `<div><dt>${categoryLabels[category]}</dt><dd>${audit.scores[category].score}/100</dd></div>`).join("")}</dl></section><section class="score-grid">${scoreCard("Performance", audit.scores.performance)}${scoreCard("Gebruikservaring", audit.scores.ux)}${scoreCard("SEO", audit.scores.seo)}${scoreCard("Beveiliging", audit.scores.security)}</section>${managementSummary(audit)}<section class="report-section"><div class="section-heading"><div><span class="eyebrow">Core Web Vitals</span><h2>Gemeten prestaties</h2></div></div><div class="metrics-grid">${metrics || `<div class="empty-state">Geen PageSpeed-meetgegevens beschikbaar. De deterministische controles zijn wel uitgevoerd.</div>`}</div></section>${criticalSection(audit)}<section class="report-section"><div class="section-heading"><div><span class="eyebrow">Alle kerngebieden</span><h2><span id="finding-count">${audit.findings.length}</span> aandachtspunten</h2></div></div><div class="filter-bar"><label class="search-field"><span>⌕</span><input id="finding-search" type="search" placeholder="Zoek in bevindingen"></label><select id="filter-category"><option value="all">Alle categorieën</option>${Object.entries(categoryLabels).map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select><select id="filter-severity"><option value="all">Alle ernstniveaus</option>${Object.entries(severityLabels).map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select><select id="filter-confidence"><option value="all">Alle statussen</option>${Object.entries(confidenceLabels).map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select><select id="sort-findings"><option value="severity">Sorteer op ernst</option><option value="category">Sorteer op categorie</option><option value="url">Sorteer op URL</option></select></div><div id="finding-list" class="finding-list"></div></section>${roadmapSection(audit)}<section class="report-section"><div class="section-heading"><div><span class="eyebrow">Paginaoverzicht</span><h2>Gecrawlde pagina’s</h2></div></div><div class="table-wrap"><table><thead><tr><th>URL</th><th>Status</th><th>Indexeerbaar</th><th>Titel</th><th>H1</th><th>Woorden</th></tr></thead><tbody>${audit.pages.map((page) => `<tr><td data-label="URL">${esc(page.finalUrl)}</td><td data-label="Status">${page.statusCode}</td><td data-label="Indexeerbaar">${page.indexable ? "Ja" : "Nee"}</td><td data-label="Titel">${esc(page.title || "—")}</td><td data-label="H1">${esc((page.h1 || []).join(" | ") || "—")}</td><td data-label="Woorden">${page.wordCount}</td></tr>`).join("")}</tbody></table></div></section><section class="report-section"><div class="section-heading"><div><span class="eyebrow">Handmatige controles</span><h2>Niet volledig automatiseerbaar</h2></div></div><div class="manual-grid">${["Toetsenbordnavigatie en focusvolgorde", "Schermlezerervaring", "Visueel kleurcontrast en zoom", "Formulierontvangst en foutafhandeling", "Google Search Console en indexering", "CMS-, plug-in- en serverupdates"].map((item) => `<article class="manual-card"><h3>${esc(item)}</h3><p>Handmatige of geautoriseerde aanvullende controle vereist.</p></article>`).join("")}</div></section><section class="report-section"><div class="section-heading"><div><span class="eyebrow">Beperkingen</span><h2>Wat niet kon worden vastgesteld</h2></div></div><ul class="checklist">${audit.limitations.map((item) => `<li>${esc(item)}</li>`).join("")}</ul></section></div>`;
+  return `<div class="container report-page"><a class="back-link" href="#/">← Nieuwe controle</a><header class="report-header"><div><span class="eyebrow">Auditrapport</span><h1>${esc(audit.domain)}</h1><div class="report-meta-line"><span>${esc(new Date(audit.completedAt || audit.startedAt).toLocaleString("nl-BE"))}</span><span>${esc(audit.scanMode)}</span><span>${esc(audit.devices.join(", "))}</span><span>${audit.pagesScanned} pagina’s</span><span>${audit.linksChecked} links</span><span>${audit.status === "partial" ? "Gedeeltelijk" : "Voltooid"}</span></div></div><div class="report-toolbar"><button id="export-json" class="button button-secondary">JSON</button><button id="export-csv" class="button button-secondary">CSV</button><button id="export-html" class="button button-secondary">HTML</button><button id="print-report" class="button button-primary">Afdrukken / PDF</button><button id="delete-report" class="button button-secondary">Rapport verwijderen</button></div></header><section class="overall-card"><div><span class="eyebrow">Totaalscore</span><strong>${audit.scores.overall}</strong><span>/100</span></div><dl>${["performance", "ux", "seo", "security"].map((category) => `<div><dt>${categoryLabels[category]}</dt><dd>${audit.scores[category].score}/100</dd></div>`).join("")}</dl></section><section class="score-grid">${scoreCard("Performance", audit.scores.performance)}${scoreCard("Gebruikservaring", audit.scores.ux)}${scoreCard("SEO", audit.scores.seo)}${scoreCard("Beveiliging", audit.scores.security)}</section>${managementSummary(audit)}<section class="report-section"><div class="section-heading"><div><span class="eyebrow">Core Web Vitals</span><h2>Gemeten prestaties</h2></div></div><div class="metrics-grid">${metrics || `<div class="empty-state">Geen PageSpeed-meetgegevens beschikbaar. De deterministische controles zijn wel uitgevoerd.</div>`}</div></section>${criticalSection(audit)}<section class="report-section"><div class="section-heading"><div><span class="eyebrow">Alle kerngebieden</span><h2><span id="finding-count">${audit.findings.length}</span> unieke aandachtspunten</h2></div></div><div class="filter-bar"><label class="search-field"><span>⌕</span><input id="finding-search" type="search" placeholder="Zoek in bevindingen"></label><select id="filter-category"><option value="all">Alle categorieën</option>${Object.entries(categoryLabels).map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select><select id="filter-severity"><option value="all">Alle ernstniveaus</option>${Object.entries(severityLabels).map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select><select id="filter-confidence"><option value="all">Alle statussen</option>${Object.entries(confidenceLabels).map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select><select id="sort-findings"><option value="severity">Sorteer op ernst</option><option value="category">Sorteer op categorie</option><option value="url">Sorteer op URL</option></select></div><div id="finding-list" class="finding-list"></div></section>${roadmapSection(audit)}<section class="report-section"><div class="section-heading"><div><span class="eyebrow">Paginaoverzicht</span><h2>Gecrawlde pagina’s</h2></div></div><div class="table-wrap"><table><thead><tr><th>URL</th><th>Status</th><th>Indexeerbaar</th><th>Titel</th><th>H1</th><th>Woorden</th></tr></thead><tbody>${audit.pages.map((page) => `<tr><td data-label="URL">${esc(page.finalUrl)}</td><td data-label="Status">${page.statusCode}</td><td data-label="Indexeerbaar">${page.indexable ? "Ja" : "Nee"}</td><td data-label="Titel">${esc(page.title || "—")}</td><td data-label="H1">${esc((page.h1 || []).join(" | ") || "—")}</td><td data-label="Woorden">${page.wordCount}</td></tr>`).join("")}</tbody></table></div></section><section class="report-section"><div class="section-heading"><div><span class="eyebrow">Handmatige controles</span><h2>Niet volledig automatiseerbaar</h2></div></div><div class="manual-grid">${["Toetsenbordnavigatie en focusvolgorde", "Schermlezerervaring", "Visueel kleurcontrast en zoom", "Formulierontvangst en foutafhandeling", "Google Search Console en indexering", "CMS-, plug-in- en serverupdates"].map((item) => `<article class="manual-card"><h3>${esc(item)}</h3><p>Handmatige of geautoriseerde aanvullende controle vereist.</p></article>`).join("")}</div></section><section class="report-section"><div class="section-heading"><div><span class="eyebrow">Beperkingen</span><h2>Wat niet kon worden vastgesteld</h2></div></div><ul class="checklist">${audit.limitations.map((item) => `<li>${esc(item)}</li>`).join("")}</ul></section></div>`;
 }
 
 function bindFilters(audit) {
@@ -57,14 +146,22 @@ function bindFilters(audit) {
   const severity = document.querySelector("#filter-severity");
   const confidence = document.querySelector("#filter-confidence");
   const sort = document.querySelector("#sort-findings");
+
   function update() {
     const query = search.value.trim().toLowerCase();
-    const items = audit.findings.filter((finding) =>
-      (category.value === "all" || finding.category === category.value)
-      && (severity.value === "all" || finding.severity === severity.value)
-      && (confidence.value === "all" || finding.confidence === confidence.value)
-      && (!query || [finding.title, finding.description, finding.evidence, finding.affectedUrl, finding.recommendation].some((value) => String(value).toLowerCase().includes(query)))
-    ).sort((a, b) => sort.value === "severity"
+    const items = audit.findings.filter((finding) => {
+      const searchable = [
+        finding.title,
+        finding.description,
+        finding.evidence,
+        finding.recommendation,
+        ...(finding.affectedUrls || [finding.affectedUrl]),
+      ];
+      return (category.value === "all" || finding.category === category.value)
+        && (severity.value === "all" || finding.severity === severity.value)
+        && (confidence.value === "all" || finding.confidence === confidence.value)
+        && (!query || searchable.some((value) => String(value).toLowerCase().includes(query)));
+    }).sort((a, b) => sort.value === "severity"
       ? severityOrder[a.severity] - severityOrder[b.severity] || a.title.localeCompare(b.title)
       : sort.value === "category"
         ? a.category.localeCompare(b.category) || severityOrder[a.severity] - severityOrder[b.severity]
@@ -72,6 +169,7 @@ function bindFilters(audit) {
     list.innerHTML = items.length ? items.map(findingCard).join("") : `<div class="empty-state">Geen bevindingen voldoen aan deze filters.</div>`;
     count.textContent = String(items.length);
   }
+
   [search, category, severity, confidence, sort].forEach((element) => element.addEventListener(element === search ? "input" : "change", update));
   update();
 }
@@ -86,12 +184,13 @@ function bindReportActions(root, audit) {
     if (apiBaseUrl) await deleteAudit(audit.id).catch(() => undefined);
     location.hash = "#/";
   };
+
   const aiButton = document.querySelector("#generate-ai");
   if (aiButton) aiButton.onclick = async () => {
     aiButton.disabled = true;
     aiButton.textContent = "Cloudflare Workers AI uitvoeren…";
     try {
-      const updated = await requestAiSummary(audit.id, audit);
+      const updated = normalizeAudit(await requestAiSummary(audit.id, audit));
       saveAudit(updated);
       root.innerHTML = renderReport(updated);
       bindFilters(updated);
@@ -110,12 +209,14 @@ export async function showReport(root, id) {
   if (!audit) {
     try {
       audit = await fetchAudit(id);
-      saveAudit(audit);
     } catch (error) {
       root.innerHTML = `<div class="container report-loading"><h1>Rapport niet beschikbaar</h1><p>${esc(error.message)}</p><a class="button button-primary" href="#/">Start een nieuwe controle</a></div>`;
       return;
     }
   }
+
+  audit = normalizeAudit(audit);
+  saveAudit(audit);
   root.innerHTML = renderReport(audit);
   bindFilters(audit);
   bindReportActions(root, audit);
