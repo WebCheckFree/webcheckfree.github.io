@@ -10,7 +10,7 @@ describe("regelgebaseerde managementsamenvatting", () => {
   it("maakt prioriteiten uit feitelijke bevindingen", () => {
     const audit = sampleAudit({ findings: [sampleFinding({ severity: "high" })] });
     const summary = buildRuleBasedSummary(audit);
-    expect(summary.executiveSummary).toContain("1 bevindingen");
+    expect(summary.executiveSummary).toContain("1 unieke aandachtspunten");
     expect(summary.topPriorities[0].title).toBe("Paginatitel ontbreekt");
     expect(summary.quickWins.length).toBe(1);
     expect(aiSummarySchema.safeParse(summary).success).toBe(true);
