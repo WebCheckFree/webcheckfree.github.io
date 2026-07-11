@@ -10,6 +10,12 @@ import {
 } from "@/worker/security/url";
 import type { Env } from "@/worker/types";
 
+function toRequestUrl(input: RequestInfo | URL): URL {
+  if (input instanceof URL) return input;
+  if (typeof input === "string") return new URL(input);
+  return new URL(input.url);
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -38,34 +44,36 @@ describe("URL-beveiliging", () => {
     expect(isPublicIp("2001:4860:4860::8888")).toBe(true);
   });
   it("valt terug op Google DNS wanneer Cloudflare DoH niet bereikbaar is", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const url = new URL(input.toString());
-      if (url.hostname === "cloudflare-dns.com") throw new Error("Cloudflare DoH unavailable");
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = toRequestUrl(input);
+      if (url.hostname === "cloudflare-dns.com") {
+        return Promise.reject(new Error("Cloudflare DoH unavailable"));
+      }
 
       const isARecord = url.searchParams.get("type") === "A";
-      return new Response(JSON.stringify({
+      return Promise.resolve(new Response(JSON.stringify({
         Status: 0,
         Answer: isARecord ? [{ type: 1, data: "93.184.216.34" }] : [],
       }), {
         status: 200,
         headers: { "content-type": "application/json" },
-      });
+      }));
     });
 
     await expect(resolveAndValidateHostname({} as Env, null, "example.com"))
       .resolves.toEqual(["93.184.216.34"]);
   });
   it("blijft werken wanneer alleen een A-record bruikbaar is", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const url = new URL(input.toString());
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = toRequestUrl(input);
       const isARecord = url.searchParams.get("type") === "A";
-      return new Response(JSON.stringify({
+      return Promise.resolve(new Response(JSON.stringify({
         Status: 0,
         Answer: isARecord ? [{ type: 1, data: "93.184.216.34" }] : [],
       }), {
         status: 200,
         headers: { "content-type": "application/dns-json" },
-      });
+      }));
     });
 
     await expect(resolveAndValidateHostname({} as Env, null, "example.com"))
