@@ -18,7 +18,7 @@ permissions:
 
 concurrency:
   group: cloudflare-worker-production
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   deploy:
