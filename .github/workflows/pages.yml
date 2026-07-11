@@ -43,7 +43,7 @@ jobs:
           console.log(configured ? `Using Cloudflare Worker API: ${configured}` : "No Worker API URL configured; setup guidance remains visible.");
           NODE
       - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: ./dist
   deploy:
