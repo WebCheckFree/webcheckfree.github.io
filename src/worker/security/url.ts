@@ -15,6 +15,12 @@ const BLOCKED_SUFFIXES = [".local", ".internal", ".localhost", ".home", ".lan", 
 const CLOUD_METADATA_IPS = new Set(["169.254.169.254", "100.100.100.200"]);
 const IPV4_LITERAL = /^(?:\d{1,3}\.){3}\d{1,3}$/;
 
+type DnsRecordType = "A" | "AAAA";
+interface DnsJsonResponse {
+  Status?: number;
+  Answer?: Array<{ type?: number; data?: string }>;
+}
+
 export function normalizeUrl(input: string): URL {
   const trimmed = input.trim();
   const candidate = /^[a-z][a-z\d+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`;
@@ -24,7 +30,7 @@ export function normalizeUrl(input: string): URL {
   } catch {
     throw new AppError({ code: "INVALID_URL", title: "Ongeldige website-URL", message: "Voer een geldige openbare website-URL in." });
   }
-  if (!['http:', 'https:'].includes(url.protocol)) {
+  if (!["http:", "https:"].includes(url.protocol)) {
     throw new AppError({ code: "UNSUPPORTED_PROTOCOL", title: "Protocol niet ondersteund", message: "Alleen HTTP- en HTTPS-websites kunnen worden gecontroleerd." });
   }
   if (url.username || url.password) {
@@ -47,21 +53,51 @@ export function isPublicIp(address: string): boolean {
   return ipaddr.parse(address).range() === "unicast";
 }
 
-async function resolveDnsJson(hostname: string, type: "A" | "AAAA"): Promise<string[]> {
-  const endpoint = new URL("https://cloudflare-dns.com/dns-query");
-  endpoint.searchParams.set("name", hostname);
-  endpoint.searchParams.set("type", type);
+async function requestDnsJson(endpoint: URL, accept: string, type: DnsRecordType): Promise<string[]> {
   const response = await fetch(endpoint, {
-    headers: { accept: "application/dns-json" },
-    redirect: "error",
+    headers: { accept },
+    redirect: "follow",
   });
-  if (!response.ok) return [];
-  const data = await response.json<{ Status?: number; Answer?: Array<{ type?: number; data?: string }> }>();
+  if (!response.ok) throw new Error(`DNS resolver returned HTTP ${response.status}`);
+
+  const data = await response.json<DnsJsonResponse>();
   if (data.Status !== 0) return [];
+
   const acceptedType = type === "A" ? 1 : 28;
   return (data.Answer ?? [])
     .filter((answer) => answer.type === acceptedType && typeof answer.data === "string")
     .map((answer) => answer.data!);
+}
+
+async function resolveDnsType(hostname: string, type: DnsRecordType): Promise<string[]> {
+  const cloudflare = new URL("https://cloudflare-dns.com/dns-query");
+  cloudflare.searchParams.set("name", hostname);
+  cloudflare.searchParams.set("type", type);
+
+  const google = new URL("https://dns.google/resolve");
+  google.searchParams.set("name", hostname);
+  google.searchParams.set("type", type);
+  google.searchParams.set("edns_client_subnet", "0.0.0.0/0");
+
+  const providers = [
+    { endpoint: cloudflare, accept: "application/dns-json" },
+    { endpoint: google, accept: "application/json" },
+  ];
+
+  let lastError: unknown;
+  let hadSuccessfulResponse = false;
+  for (const provider of providers) {
+    try {
+      const addresses = await requestDnsJson(provider.endpoint, provider.accept, type);
+      hadSuccessfulResponse = true;
+      if (addresses.length) return addresses;
+    } catch (cause) {
+      lastError = cause;
+    }
+  }
+
+  if (!hadSuccessfulResponse && lastError) throw lastError;
+  return [];
 }
 
 export async function resolveAndValidateHostname(env: Env, state: AuditJobState | null, hostname: string): Promise<string[]> {
@@ -79,12 +115,17 @@ export async function resolveAndValidateHostname(env: Env, state: AuditJobState 
   const cached = state?.dnsCache[host];
   if (cached && cached.expiresAt > Date.now()) return cached.addresses;
 
-  let addresses: string[];
-  try {
-    const [ipv4, ipv6] = await Promise.all([resolveDnsJson(host, "A"), resolveDnsJson(host, "AAAA")]);
-    addresses = [...new Set([...ipv4, ...ipv6])];
-  } catch (cause) {
-    throw new AppError({ code: "DNS_FAILURE", title: "Domein niet gevonden", message: "Het domein kon niet via DNS worden gevonden. Controleer het webadres.", retryable: true, cause });
+  const results = await Promise.allSettled([resolveDnsType(host, "A"), resolveDnsType(host, "AAAA")]);
+  const addresses = [...new Set(results.flatMap((result) => result.status === "fulfilled" ? result.value : []))];
+
+  if (!addresses.length && results.every((result) => result.status === "rejected")) {
+    throw new AppError({
+      code: "DNS_FAILURE",
+      title: "DNS-controle tijdelijk niet beschikbaar",
+      message: "De DNS-resolvers konden tijdelijk niet worden bereikt. Probeer de websitecheck opnieuw.",
+      retryable: true,
+      cause: results,
+    });
   }
   if (!addresses.length) {
     throw new AppError({ code: "DNS_FAILURE", title: "Domein niet gevonden", message: "Voor dit domein zijn geen bruikbare DNS-adressen gevonden.", retryable: true });
@@ -115,7 +156,7 @@ export function canonicalizeCrawlUrl(input: string, base: string): URL | null {
   } catch {
     return null;
   }
-  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return null;
+  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return null;
   url.hash = "";
   ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "gclid", "fbclid"].forEach((key) => url.searchParams.delete(key));
   url.searchParams.sort();
