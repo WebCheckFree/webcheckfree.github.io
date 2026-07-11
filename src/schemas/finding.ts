@@ -24,6 +24,8 @@ export const findingSchema = z.object({
   description: z.string().min(1),
   evidence: z.string().min(1),
   affectedUrl: z.string().url(),
+  affectedUrls: z.array(z.string().url()).min(1).optional(),
+  occurrenceCount: z.number().int().positive().optional(),
   affectedElement: z.string().optional(),
   severity: severitySchema,
   confidence: confidenceSchema,
