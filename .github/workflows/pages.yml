@@ -1,58 +1,54 @@
-name: Deploy GitHub Pages
+name: Deploy Cloudflare Worker
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "site/**"
-      - "scripts/check-site.mjs"
-      - ".github/workflows/pages.yml"
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/**"
+      - "migrations/**"
+      - "wrangler.jsonc"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/worker.yml"
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: cloudflare-worker-production
+  cancel-in-progress: false
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
+    environment: production
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm run check:site
-      - name: Prepare static site
+
+      - name: Install dependencies from public npm registry
+        run: npm install --package-lock=false --registry=https://registry.npmjs.org --no-audit --no-fund
+
+      - name: Validate project
+        run: npm run check
+
+      - name: Deploy Worker and provision bindings
+        run: npx wrangler deploy
         env:
-          WEBCHECK_API_BASE_URL: ${{ vars.WEBCHECK_API_BASE_URL }}
-        run: |
-          cp -R site dist
-          node --input-type=module - <<'NODE'
-          import { readFile, writeFile } from "node:fs/promises";
-          const path = "dist/config.js";
-          const configured = (process.env.WEBCHECK_API_BASE_URL ?? "").replace(/\/$/, "");
-          const source = await readFile(path, "utf8");
-          await writeFile(path, source.replace("__WEBCHECK_API_BASE_URL__", configured));
-          console.log(configured ? `Using Cloudflare Worker API: ${configured}` : "No Worker API URL configured; setup guidance remains visible.");
-          NODE
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./dist
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@v4
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Apply D1 migrations
+        run: npx wrangler d1 migrations apply webcheckfree --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
