@@ -98,9 +98,6 @@ export function groupFindingsByRootCause(findings: Finding[]): Finding[] {
       confidence,
       estimatedEffort,
       references,
-      evidence: affectedUrls.length > 1
-        ? `${affectedUrls.length} pagina's getroffen. Voorbeeld: ${representative.evidence}`
-        : representative.evidence,
     });
   });
 }
